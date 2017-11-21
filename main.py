@@ -14,26 +14,59 @@ def main():
     
     # get input file, set flags
     if len(sys.argv) < 2:
-        print("This script requires an input file.\n\tUsage: python main.py <input file path> [--debug]")
+        print("This script requires an input file and maxstar value.\n\tUsage: python main.py <input file path> <int> [--debug]")
         return
     input_file_path = sys.argv[1]
+    maxstar = int(sys.argv[2])
     debug = ("--debug" in sys.argv)
+
+    if maxstar < 1:
+        print("maxstar cannot be less than 1")
+        return
     with open(input_file_path) as input_file:
         input_lines = input_file.readlines()
-    input_lines = [l.rstrip() for l in input_lines]
+    input_lines = [l.strip() for l in input_lines]
     
     training_data = parse_training_data(input_lines)
     if debug:
         print("Training Data: ", pp.pformat(training_data))
 
-    rules = aq(training_data)
+    concepts = set([case["d"][1] for case in training_data["cases"]])
+    if debug:
+        print("Concepts: ", pp.pformat(concepts))
+
+    rules = []
+    consistent = True
+    for concept in concepts:
+        if debug:
+            print("\n----------------------\nConcept: ", concept)
+        
+        positive = [case for case in training_data["cases"] if case["d"][1] == concept]
+        negative = [case for case in training_data["cases"] if case["d"][1] != concept]
+        if debug:
+            print("Positive Cases: ", pp.pformat(positive))
+        if debug:
+            print("Negative Cases: ", pp.pformat(negative))
+        try:
+            cover = aq(positive, negative, maxstar)
+        except Exception as e:
+            print(e)
+            # inconsistent data set, can't generate rules for this concept
+            print("Data set is inconsistent, cannot generate rules for concept: ", concept)
+            consistent = False
+            continue
+        
+        rules += cover
+
     if debug:
             print("Rules: ", pp.pformat(rules))
 
-
     #deleteme
-    print("\n-----------------------------\nRULES:")
+    if debug:
+        print("\n-----------------------------\nRULES:")
 
+    if not consistent:
+        print("! The input data set is inconsistent")
     for rule in rules:
         print(format_rule(rule))
 
@@ -55,11 +88,11 @@ def parse_training_data(lines):
 
     # remove comments
     for line in lines:
-        if line[0] == "!":
+        if not line or line.strip()[0] == "!":
             lines.remove(line)
     # throw away the first line
     lines.pop(0)
-    names_str = lines.pop(0).rstrip()
+    names_str = lines.pop(0).strip()
     names = names_str.split(" ")
     names = [n for n in names if n != "[" and n != "]" and bool(n) and not n.isspace()]
     if debug:
@@ -67,71 +100,67 @@ def parse_training_data(lines):
 
     cases = []
     for line in lines:
-        vals = line.rstrip().split(" ")
+        vals = line.strip().split(" ")
         av = list(zip(names, vals))
         dv = av.pop()
         cases.append({"a": av, "d": dv})
     
     dname = names.pop()
     anames = names
+
+    # all cutpoints goes here TODO
     
     return {"decision": dname, "attributes": anames, "cases": cases}
 
 
-def aq(data):
-    concepts = set([case["d"][1] for case in data["cases"]])
-    if debug:
-        print("Concepts: ", pp.pformat(concepts))
+def aq(positive, negative, maxstar):
     rules = []
-    for concept in concepts:
+    targets = positive
+    while len(targets) > 0:
+        seed = random.choice(targets)
         if debug:
-            print("\n----------------------\nConcept: ", concept)
-        
-        positive = [case for case in data["cases"] if case["d"][1] == concept]
-        negative = [case for case in data["cases"] if case["d"][1] != concept]
+            print("Seed: ", pp.pformat(seed))
+
+        pstar = star(seed, negative, maxstar)
+
         if debug:
-            print("Positive Cases: ", pp.pformat(positive))
-        if debug:
-            print("Negative Cases: ", pp.pformat(negative))
-        
-        targets = positive
-        while len(targets) > 0:
-            seed = random.choice(targets)
-            if debug:
-                print("Seed: ", pp.pformat(seed))
+            print("PStar: ", pp.pformat(pstar))
 
-            pstar = star(seed, negative)
-
-            if debug:
-                print("PStar: ", pp.pformat(pstar))
-
-            # now we choose the most covering, smallest list in pstar
-            candidates = [{"avlist": avlist} for avlist in pstar]
-            for candidate in candidates:
-                # compute # of positives covered
-                num_covered = 0
-                for t in targets:
-                    if diff(candidate["avlist"], t["a"]) is None:
-                        num_covered += 1
-                candidate["covered"] = num_covered 
-            candidates.sort(reverse=True, key=lambda x: (x["covered"], 1.0 / len(x["avlist"])))
-            chosen = candidates[0]["avlist"]
-            rules.append({"a": chosen, "d": (data["decision"], concept)})
-
-            # create new target list and seed (if len(target) > 0)
-            new_targets = []
+        # now we choose the most covering, smallest list in pstar
+        candidates = [{"avlist": avlist} for avlist in pstar]
+        for candidate in candidates:
+            # compute # of positives covered
+            num_covered = 0
             for t in targets:
-                if diff(chosen, t["a"]) is not None:
-                    new_targets.append(t)
-            targets = new_targets
+                if diff(candidate["avlist"], t["a"]) is None:
+                    num_covered += 1
+            candidate["covered"] = num_covered 
+
+        candidates.sort(reverse=True, key=lambda x: (x["covered"], 1.0 / len(x["avlist"])))
+        best = candidates[0]["avlist"]
+        rules.append({"a": best, "d": seed["d"]})
+
+        # create new target list and seed (if len(targets) > 0)
+        new_targets = []
+        for t in targets:
+            if diff(best, t["a"]) is not None:
+                new_targets.append(t)
+        targets = new_targets
 
     return rules
 
 
-def star(seed, negative):
+def star(seed, negative, maxstar):
     # pstar is a list of sets of (a,v)
     pstar = []
     for ncase in negative:
+        if len(pstar) > maxstar:
+            if debug:
+                print("Trimming pstar, len(pstar) = %d, maxstar = %d" % (len(pstar), maxstar))
+            # remove worst len(pstar) - maxstar rules
+            pstar.sort(key=len)
+            pstar = pstar[:maxstar]
+
         n = ncase["a"]
         if not pstar:
             # pstar is empty

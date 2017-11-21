@@ -8,7 +8,7 @@ class VRange:
         self.high = high
 
     def __contains__(self, item):
-        return self.low <= item < self.high
+        return self.low <= item <= self.high
 
     def intersect(self, anotherVRange):
         upper_low = self.low if self.low > anotherVRange.low else anotherVRange.low
@@ -23,6 +23,12 @@ class VRange:
     def __and__(self, anotherVRange):
         return self.intersect(anotherVRange)
 
-    def __format__(self, anotherVRange):
+    def __or__(self, anotherVRange):
         return self.union(anotherVRange)
+
+    def __str__(self):
+        return "%g..%g" % (self.low, self.high)
+
+    def __repr__(self):
+        return "VRange(%g, %g)" % (self.low, self.high)
 

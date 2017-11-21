@@ -3,9 +3,21 @@ import sys
 import random
 import pprint
 import json
+from decimal import Decimal
+
+from VRange import VRange
 
 debug = False
 pp = pprint.PrettyPrinter(indent=4)
+
+
+def is_numeric(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
 
 def main():
     # TODO: make the program interact according to specification
@@ -30,6 +42,9 @@ def main():
     training_data = parse_training_data(input_lines)
     if debug:
         print("Training Data: ", pp.pformat(training_data))
+
+    # return
+    # TODO DELETE THIS ^
 
     concepts = set([case["d"][1] for case in training_data["cases"]])
     if debug:
@@ -59,7 +74,7 @@ def main():
         rules += cover
 
     if debug:
-            print("Rules: ", pp.pformat(rules))
+        print("Rules: ", pp.pformat(rules))
 
     #deleteme
     if debug:
@@ -71,7 +86,6 @@ def main():
         print(format_rule(rule))
 
 
-
 def format_rule(rule):
     # (Ink - color, not black) & (Body - color, not black) -> (Attitude, plus)
     str_attrs = ["(%s, %s)" % (a[0], a[1]) for a in rule["a"]]
@@ -81,11 +95,7 @@ def format_rule(rule):
     return rule_str
     
 
-
 def parse_training_data(lines):
-    # TODO: Use all cutpoints strategy to deal with numerical attributes.
-    # Examples of numerical values are 42, -12.45; etc
-
     # remove comments
     for line in lines:
         if not line or line.strip()[0] == "!":
@@ -108,8 +118,50 @@ def parse_training_data(lines):
     dname = names.pop()
     anames = names
 
-    # all cutpoints goes here TODO
+    # ALL CUTPOINTS
+    # determine which attrs are numeric
+    numeric_attr_names = []
+    for av in cases[0]["a"]:
+        if is_numeric(av[1]):
+            numeric_attr_names.append(av[0])
+
+    if debug:
+        print("numeric_attr_names: ", numeric_attr_names)
     
+    # pull out numeric attributes
+    numeric_attrs = {n_name: [] for n_name in numeric_attr_names}
+    for case in cases:
+        attrs = list(case["a"])
+        for attr in attrs:
+            if attr[0] in numeric_attr_names:
+                numeric_attrs[attr[0]].append(attr)
+    if debug:
+        print("numeric_attrs: ", pp.pformat(numeric_attrs))
+    
+    # find all cutpoints
+    cutpoints = {n_name: [] for n_name in numeric_attr_names}
+    for (name, avlist) in numeric_attrs.items():
+        vals = sorted(list(set([Decimal(av[1]) for av in avlist])))
+        low = vals[0]
+        high = vals[len(vals) - 1]
+        cutpoints_nums = [(vals[i] + vals[i + 1]) / 2 for i in range(0, len(vals) - 1)]
+        cutpoints[name] = [VRange(low, i) for i in cutpoints_nums] + [VRange(i, high) for i in cutpoints_nums]
+
+    # add cutpoint attrs
+    for case in cases:
+        attrs = list(case["a"])
+        for attr in case["a"]:
+            if attr[0] in numeric_attr_names:
+                for cutpoint in cutpoints[attr[0]]:
+                    attrs.append(("%s %s" % (attr[0], str(cutpoint)), str(Decimal(attr[1]) in cutpoint)[0]))
+        case["a"] = [attr for attr in attrs if attr[0] not in numeric_attr_names]
+
+    if debug:
+        print("Cases with all cutpoints: ", pp.pformat(cases))
+
+    # TODO remove numeric attr names from anames
+    anames = [aname for aname in anames if aname not in numeric_attr_names]
+
     return {"decision": dname, "attributes": anames, "cases": cases}
 
 

@@ -1,5 +1,6 @@
 from __future__ import print_function
 import sys
+import os
 import random
 import pprint
 import json
@@ -11,40 +12,63 @@ debug = False
 pp = pprint.PrettyPrinter(indent=4)
 
 
-def is_numeric(s):
+def is_numeric(num):
     try:
-        float(s)
+        float(num)
+        return True
+    except ValueError:
+        return False
+
+def is_valid_filepath(filepath):
+    if debug:
+        print("Checking validity of filepath ", filepath)
+    try:
+        return os.path.isfile(filepath)
+    except:
+        return False
+
+def is_valid_maxstar(maxstar):
+    if debug:
+        print("Checking validity of maxstar ", maxstar)
+    try:
+        int(maxstar)
+        if int(maxstar) < 1:
+            return False
         return True
     except ValueError:
         return False
 
 
 def main():
-    # TODO: make the program interact according to specification
     # TODO: add dropping conditions
     global debug
     
     # get input file, set flags
-    if len(sys.argv) < 2:
-        print("This script requires an input file and maxstar value.\n\tUsage: python main.py <input file path> <int> [--debug]")
-        return
-    input_file_path = sys.argv[1]
-    maxstar = int(sys.argv[2])
-    debug = ("--debug" in sys.argv)
 
-    if maxstar < 1:
-        print("maxstar cannot be less than 1")
-        return
+    debug = ("--debug" in sys.argv)
+    input_file_path = "totally not a file"
+    maxstar_str = "0"
+
+    if len(sys.argv) >= 3:
+        # set defaults from 
+        print("Detected arguments, setting default input file and maxstar")
+        input_file_path = sys.argv[1]
+        maxstar_str = sys.argv[2]
+
+    while not is_valid_filepath(input_file_path):
+        input_file_path = raw_input("Enter the name of the input file: ")
+    
     with open(input_file_path) as input_file:
         input_lines = input_file.readlines()
     input_lines = [l.strip() for l in input_lines]
+
+    while not is_valid_maxstar(maxstar_str):
+        maxstar_str = raw_input("Enter the maxstar: ")
+    maxstar = int(maxstar_str)
     
     training_data = parse_training_data(input_lines)
     if debug:
         print("Training Data: ", pp.pformat(training_data))
-
-    # return
-    # TODO DELETE THIS ^
 
     concepts = set([case["d"][1] for case in training_data["cases"]])
     if debug:

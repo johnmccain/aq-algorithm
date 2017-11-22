@@ -74,7 +74,7 @@ def main():
     if debug:
         print("Concepts: ", pp.pformat(concepts))
 
-    rules = []
+    neg_rules = []
     consistent = True
     for concept in concepts:
         if debug:
@@ -95,17 +95,26 @@ def main():
             consistent = False
             continue
         
-        rules += cover
+        neg_rules += cover
 
     if debug:
-        print("Rules: ", pp.pformat(rules))
+        print("Rules: ", pp.pformat(neg_rules))
 
-    #deleteme
     if debug:
-        print("\n-----------------------------\nRULES:")
+        print("\n-----------------------------\nNEGATED RULES:")
 
     if not consistent:
         print("! The input data set is inconsistent")
+    for rule in neg_rules:
+        print(format_rule(rule))
+    
+    rules = []
+    for rule in neg_rules:
+        rules += de_negate_rule(rule, training_data["possible_attribute_values"])
+
+    if debug:
+        print("\n-----------------------------\nDE_NEGATED RULES:")
+
     for rule in rules:
         print(format_rule(rule))
 
@@ -172,21 +181,33 @@ def parse_training_data(lines):
         cutpoints[name] = [VRange(low, i) for i in cutpoints_nums] + [VRange(i, high) for i in cutpoints_nums]
 
     # add cutpoint attrs
+    cutpoint_attrs = set()
     for case in cases:
         attrs = list(case["a"])
         for attr in case["a"]:
             if attr[0] in numeric_attr_names:
                 for cutpoint in cutpoints[attr[0]]:
+                    cutpoint_attrs.add("%s %s" % (attr[0], str(cutpoint)))
                     attrs.append(("%s %s" % (attr[0], str(cutpoint)), str(Decimal(attr[1]) in cutpoint)[0]))
         case["a"] = [attr for attr in attrs if attr[0] not in numeric_attr_names]
+
+    anames += cutpoint_attrs
 
     if debug:
         print("Cases with all cutpoints: ", pp.pformat(cases))
 
-    # TODO remove numeric attr names from anames
     anames = [aname for aname in anames if aname not in numeric_attr_names]
 
-    return {"decision": dname, "attributes": anames, "cases": cases}
+    # find all possible values for each attribute
+    possible_values = {a: [] for a in anames}
+    for attr in anames:
+        pvalues = set()
+        for case in cases:
+            av = next(av for av in case["a"] if av[0] == attr)
+            pvalues.add(av[1])
+        possible_values[attr] = list(pvalues)
+
+    return {"decision": dname, "attributes": anames, "possible_attribute_values": possible_values, "cases": cases}
 
 
 def aq(positive, negative, maxstar):
@@ -274,13 +295,11 @@ def diff(a, b):
     diffs = []
     # print("DIFF:\n\ta: ", a, "\n\tb: ", b)
     for a_av in a:
-        try:
-            b_av = next(av for av in b if av[0] == a_av[0])
-        except:
-            continue
-        # print("\ta_av: ", a_av, "\tb_av: ", b_av)
-        if not match(a_av, b_av):
-            diffs.append(a_av)
+        bmatches = [av for av in b if av[0] == a_av[0]]
+        for b_av in bmatches:
+            # print("\ta_av: ", a_av, "\tb_av: ", b_av)
+            if not match(a_av, b_av):
+                diffs.append(a_av)
     return diffs if diffs else None
 
 
@@ -291,16 +310,14 @@ def neg_diff(a, b):
     diffs = []
     # print("DIFF:\n\ta: ", a, "\n\tb: ", b)
     for a_av in a:
-        try:
-            b_av = next(av for av in b if av[0] == a_av[0])
-        except:
-            continue
-        # print("\ta_av: ", a_av, "\tb_av: ", b_av)
-        if not match(a_av, b_av):
-            if type(b_av[1]) is tuple:
-                diffs.append(b_av)
-            else:
-                diffs.append((b_av[0], ("not", b_av[1])))
+        bmatches = [av for av in b if av[0] == a_av[0]]
+        for b_av in bmatches:
+            # print("\ta_av: ", a_av, "\tb_av: ", b_av)
+            if not match(a_av, b_av):
+                if type(b_av[1]) is tuple:
+                    diffs.append(b_av)
+                else:
+                    diffs.append((b_av[0], ("not", b_av[1])))
     return diffs if diffs else None
 
 
@@ -326,6 +343,47 @@ def match(x, y):
             # neither x or y are negated
             return x[1] == y[1]
 
+def de_negate_rule(rule, possible_values):
+    attr_names = set([av[0] for av in rule["a"]])
+    attr_lists = {aname: [] for aname in attr_names}
+    dn_attr_lists = {aname: [] for aname in attr_names}
+
+    for av in rule["a"]:
+        attr_lists[av[0]].append(av)
+    
+    for aname in attr_lists:
+        alist = attr_lists[aname]
+        for val in possible_values[aname]:
+            if neg_diff([(aname, val)], alist) is None:
+                dn_attr_lists[aname].append((aname, val))
+
+    noperm_avs = []
+    perm_avs = {}
+    for aname in dn_attr_lists:
+        alist = dn_attr_lists[aname]
+        if len(alist) == 1:
+            noperm_avs += alist
+        else:
+            perm_avs[aname] = alist
+
+    permuted = [noperm_avs]
+    for aname in perm_avs:
+        alist = perm_avs[aname]
+        npermuted = []
+        for q in permuted:
+            for r in alist:
+                npermuted.append(list(q) + [r])
+        permuted = npermuted
+
+    rules = [{"a": p, "d": rule["d"]} for p in permuted]
+    return rules
+
+def de_negate(av, possible_values):
+    de_negated = []
+    for val in possible_values[av[0]]:
+        if match(av, (av[0], val)):
+            de_negated.append((av[0], val))
+    return de_negated
 
 if __name__ == "__main__":
     main()

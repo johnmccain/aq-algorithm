@@ -1,0 +1,9 @@
+< a a a a d >
+[ A B C D E ]
+0.8 0.3 7.2 green very-small
+0.8 1.1 7.2 blue small
+0.8 1.1 10.2 red medium
+1.2 0.3 10.2 red medium
+1.2 2.3 10.2 red medium
+2.0 2.3 10.2 blue high
+2.0 2.3 15.2 blue very-high

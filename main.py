@@ -240,7 +240,7 @@ def star(seed, negative, maxstar):
         n = ncase["a"]
         if not pstar:
             # pstar is empty
-            d = diff(seed["a"], n)
+            d = neg_diff(seed["a"], n)
             if d is None:
                 # TODO: handle inconsistent data set
                 raise Exception(
@@ -251,7 +251,7 @@ def star(seed, negative, maxstar):
                 d = diff(p, n)
                 if d is None:
                     # n is not covered by p
-                    d = diff(seed["a"], n)
+                    d = neg_diff(seed["a"], n)
                     if d is None:
                         # TODO: handle inconsistent data set
                         raise Exception(
@@ -269,18 +269,62 @@ def star(seed, negative, maxstar):
 
 def diff(a, b):
     """
-    returns (a,v) pairs from a that are different from b
-    a should not include (a,v) pairs with an a not in b
+    returns (a,v) pairs from a that exclude b
     """
     diffs = []
     # print("DIFF:\n\ta: ", a, "\n\tb: ", b)
     for a_av in a:
-        b_av = next(av for av in b if av[0] == a_av[0])
+        try:
+            b_av = next(av for av in b if av[0] == a_av[0])
+        except:
+            continue
         # print("\ta_av: ", a_av, "\tb_av: ", b_av)
-        if a_av[1] != b_av[1]:
+        if not match(a_av, b_av):
             diffs.append(a_av)
     return diffs if diffs else None
 
+
+def neg_diff(a, b):
+    """
+    returns negated (a,v) pairs of b that include a
+    """
+    diffs = []
+    # print("DIFF:\n\ta: ", a, "\n\tb: ", b)
+    for a_av in a:
+        try:
+            b_av = next(av for av in b if av[0] == a_av[0])
+        except:
+            continue
+        # print("\ta_av: ", a_av, "\tb_av: ", b_av)
+        if not match(a_av, b_av):
+            if type(b_av[1]) is tuple:
+                diffs.append(b_av)
+            else:
+                diffs.append((b_av[0], ("not", b_av[1])))
+    return diffs if diffs else None
+
+
+def match(x, y):
+    if x[0] != y[0]:
+        # attributes are not the same
+        return False
+    if type(x[1]) is tuple:
+        # x is negated
+        if type(y[1]) is tuple:
+            # x and y are negated CHECK THIS
+            return x[1][1] == y[1][1]
+            pass
+        else:
+            # x is negated, y is not
+            return x[1][1] != y[1]
+    else:
+        # x is not negated
+        if type(y[1]) is tuple:
+            # x is not negated, y is
+            return x[1] != y[1][1]
+        else:
+            # neither x or y are negated
+            return x[1] == y[1]
 
 
 if __name__ == "__main__":

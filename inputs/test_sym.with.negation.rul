@@ -1,0 +1,5 @@
+(C 8.7..15.2, not T) & (D, not green) -> (E, small)
+(A 1.6..2, not F) -> (E, high)
+(A 1.6..2, not F) -> (E, very-high)
+(D, not green) & (D, not blue) -> (E, medium)
+(B 0.7..2.3, not T) -> (E, very-small)

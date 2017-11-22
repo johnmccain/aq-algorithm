@@ -108,6 +108,41 @@ def main():
     for rule in neg_rules:
         rules += de_negate_rule(rule, training_data["possible_attribute_values"])
 
+    # dropping conditions
+    for rule in neg_rules:
+        concept = rule["d"][1]
+        positive = [case for case in training_data["cases"] if case["d"][1] == concept]
+        negative = [case for case in training_data["cases"] if case["d"][1] != concept]
+        rule = drop_conditions(rule, positive, negative)
+
+    for rule in rules:
+        concept = rule["d"][1]
+        positive = [case for case in training_data["cases"]
+                    if case["d"][1] == concept]
+        negative = [case for case in training_data["cases"]
+                    if case["d"][1] != concept]
+        rule = drop_conditions(rule, positive, negative)
+
+    # remove unecessary rules
+    for concept in concepts:
+        positive = [case for case in training_data["cases"] if case["d"][1] == concept]
+
+        concept_nrules = [rule for rule in neg_rules if rule["d"][1] == concept]
+        concept_rules = [rule for rule in rules if rule["d"][1] == concept]
+
+        for rule in concept_nrules:
+            neg_rules.remove(rule)
+        for rule in concept_rules:
+            rules.remove(rule)
+        
+        necessary_nrules = remove_unecessary_rules(concept_nrules, positive)
+        necessary_rules = remove_unecessary_rules(concept_rules, positive)
+        for rule in necessary_nrules:
+            neg_rules.append(rule)
+        for rule in necessary_rules:
+            rules.append(rule)
+
+
     neg_rules_str = ""
     rules_str = ""
 
@@ -400,12 +435,55 @@ def de_negate_rule(rule, possible_values):
     rules = [{"a": p, "d": rule["d"]} for p in permuted]
     return rules
 
-def de_negate(av, possible_values):
-    de_negated = []
-    for val in possible_values[av[0]]:
-        if match(av, (av[0], val)):
-            de_negated.append((av[0], val))
-    return de_negated
+def drop_conditions(rule, positive, negative):
+    covered = []
+    for case in positive:
+        if neg_diff(rule["a"], case["a"]) is None:
+            covered.append(case)
+    
+    new_conditions = list(rule["a"])
+    for condition in rule["a"]:
+        new_conditions.remove(condition)
+        valid = True
+        for case in covered:
+            if neg_diff(new_conditions, case["a"]) is not None:
+                valid = False
+        for case in negative:
+            if neg_diff(new_conditions, case["a"]) is None:
+                valid = False
+        if not valid:
+            # can't remove
+            new_conditions.append(condition)
+        else:
+            if debug:
+                print("Dropping condition", str(condition), "from rule", str(rule))
+    rule["a"] = new_conditions
+
+    return rule
+
+
+def remove_unecessary_rules(rules, positive):
+    uncovered = positive
+    necessary_rules = []
+
+    for rule in rules:
+        if len(uncovered) == 0:
+            return necessary_rules
+
+        uncovered_len = len(uncovered)
+        new_uncovered = list(uncovered)
+        for case in uncovered:
+            if neg_diff(rule["a"], case["a"]) is None:
+                new_uncovered.remove(case)
+
+        cases_covered_by_rule = uncovered_len - len(new_uncovered)
+        uncovered = new_uncovered
+
+        if cases_covered_by_rule > 0:
+            necessary_rules.append(rule)
+
+    return necessary_rules
+
 
 if __name__ == "__main__":
     main()

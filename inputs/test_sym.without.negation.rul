@@ -1,5 +1,0 @@
-(C 8.7..15.2, F) & (D, blue) -> (E, small)
-(A 1.6..2, T) -> (E, high)
-(A 1.6..2, T) -> (E, very-high)
-(D, red) -> (E, medium)
-(B 0.7..2.3, F) -> (E, very-small)

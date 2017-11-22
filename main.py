@@ -4,6 +4,7 @@ import os
 import random
 import pprint
 import json
+import re
 from decimal import Decimal
 
 from VRange import VRange
@@ -62,6 +63,9 @@ def main():
         input_lines = input_file.readlines()
     input_lines = [l.strip() for l in input_lines]
 
+    input_filename = re.sub(r"\.[^.]+$", "", input_file_path)
+    print("input filename: ", input_filename)
+
     while not is_valid_maxstar(maxstar_str):
         maxstar_str = raw_input("Enter the maxstar: ")
     maxstar = int(maxstar_str)
@@ -100,28 +104,46 @@ def main():
     if debug:
         print("Rules: ", pp.pformat(neg_rules))
 
-    if debug:
-        print("\n-----------------------------\nNEGATED RULES:")
-
-    if not consistent:
-        print("! The input data set is inconsistent")
-    for rule in neg_rules:
-        print(format_rule(rule))
-    
     rules = []
     for rule in neg_rules:
         rules += de_negate_rule(rule, training_data["possible_attribute_values"])
 
-    if debug:
-        print("\n-----------------------------\nDE_NEGATED RULES:")
+    neg_rules_str = ""
+    rules_str = ""
+
+    if not consistent:
+        print("! The input data set is inconsistent")
+        neg_rules_str += "! The input data set is inconsistent\n"
+        rules_str += "! The input data set is inconsistent\n"
+
+    for rule in neg_rules:
+        rstr = format_rule(rule)
+        neg_rules_str += "%s\n" % rstr
 
     for rule in rules:
-        print(format_rule(rule))
+        rstr = format_rule(rule)
+        rules_str += "%s\n" % rstr
+
+    with open("%s.with.negation.rul" % input_filename, mode="w") as f:
+        f.write(neg_rules_str)
+
+    with open("%s.without.negation.rul" % input_filename, mode="w") as f:
+        f.write(rules_str)
+
+    print("\n-----------------------------\nNEGATED RULES:")
+    print(neg_rules_str)
+    print("\n-----------------------------\nDE_NEGATED RULES:")
+    print(rules_str)
 
 
 def format_rule(rule):
     # (Ink - color, not black) & (Body - color, not black) -> (Attitude, plus)
-    str_attrs = ["(%s, %s)" % (a[0], a[1]) for a in rule["a"]]
+    str_attrs = []
+    for av in rule["a"]:
+        if type(av[1]) is tuple:
+            str_attrs.append("(%s, not %s)" % (av[0], av[1][1]))
+        else:
+            str_attrs.append("(%s, %s)" % (av[0], av[1]))
     attrs_str = " & ".join(str_attrs)
     dec_str = "(%s, %s)" % (rule["d"][0], rule["d"][1])
     rule_str = "%s -> %s" % (attrs_str, dec_str)
